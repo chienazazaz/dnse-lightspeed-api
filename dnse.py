@@ -9,15 +9,16 @@ from paho.mqtt import client as mqtt_client
 from paho.mqtt.client import MQTTv5
 from paho.mqtt.subscribeoptions import SubscribeOptions
 
+
 class ClientConfig:
     BROKER = "datafeed-lts.dnse.com.vn"
     PORT = 443
     TOPICS = (
-        "plaintext/quotes/derivative/OHLC/1/VN30F1M",
-        "plaintext/quotes/stock/tick/+",
+        "plaintext/quotes/stock/SI/+",
+        "plaintext/quotes/stock/OHLC/1H/+",
+        "plaintext/quotes/index/MI/VNINDEX",
+        "plaintext/quotes/index/MI/VN30",
     )
-
-
     USERNAME = os.getenv("DNSE_USERNAME", "")
     USER_ID = os.getenv("DNSE_ID", "")
     CLIENT_ID = f"dnse-price-json-mqtt-ws-sub-{USER_ID}-{random.randint(0, 1000)}"
@@ -26,14 +27,15 @@ class ClientConfig:
     MAX_RECONNECT_COUNT = 12
     MAX_RECONNECT_DELAY = 60
 
-class DNSEClient():
+
+class DNSEClient:
     def __init__(self):
         pass
 
     def get_token(self):
         res = request(
             method="POST",
-            url = "https://services.entrade.com.vn/dnse-user-service/api/auth",
+            url="https://services.entrade.com.vn/dnse-user-service/api/auth",
             headers={
                 "Content-Type": "application/json",
                 "Accept": "application/json",
@@ -43,24 +45,22 @@ class DNSEClient():
                 "password": os.getenv("DNSE_PASSWORD", ""),
             },
         ).json()
-        print(res,123123123)
 
         return res.get("token", None)
 
     def connect_mqtt(self):
-        def on_connect(client, userdata, flags, rc,properties):
+        def on_connect(client, userdata, flags, rc, properties):
             if rc == 0:
                 print("Connected to MQTT Broker!")
             else:
                 print("Failed to connect, return code %d\n", rc)
 
         client = mqtt_client.Client(
-                callback_api_version=mqtt_client.CallbackAPIVersion.VERSION2,
-                client_id=ClientConfig.CLIENT_ID,
-                protocol=MQTTv5,
-                transport="websockets",
-                )
-        
+            callback_api_version=mqtt_client.CallbackAPIVersion.VERSION2,
+            client_id=ClientConfig.CLIENT_ID,
+            protocol=MQTTv5,
+            transport="websockets",
+        )
 
         client.on_connect = on_connect
 
@@ -91,25 +91,23 @@ class DNSEClient():
             reconnect_count += 1
         logging.info("Reconnect failed after %s attempts. Exiting...", reconnect_count)
 
-
-    def subscribe(self,client):
+    def subscribe(self, client):
 
         def on_message(client, userdata, msg):
             print(f"Received `{msg.payload.decode()}` from `{msg.topic}` topic")
 
-        topic_tuple = [(topic, SubscribeOptions(qos=2)) for topic in ClientConfig.TOPICS]
+        topic_tuple = [
+            (topic, SubscribeOptions(qos=2)) for topic in ClientConfig.TOPICS
+        ]
         client.subscribe(topic_tuple)
         client.on_message = on_message
 
-
-
-    def on_message( client, userdata, msg):
+    def on_message(client, userdata, msg):
         logging.debug(f"Topic: {msg.topic}, msg: {msg.payload}")
         payload = json.JSONDecoder().decode(msg.payload.decode())
 
         logging.debug(f"payload: {payload}")
         logging.debug(f'symbol: {payload["symbol"]}')
-
 
     def run(self):
         logging.basicConfig(
